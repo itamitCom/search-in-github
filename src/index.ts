@@ -1,32 +1,29 @@
-import { fromEvent } from 'rxjs';
-import { switchMap } from 'rxjs/operators';
+import { fromEvent, Observable }              from 'rxjs';
+import { switchMap, map, filter }             from 'rxjs/operators';
+import { debounceTime, distinctUntilChanged } from 'rxjs/internal/operators';
 
 const inputSearch     = document.getElementById('search') as HTMLInputElement;
 const divContent      = document.getElementById('result') as HTMLDivElement;
-const changeSequence$ = fromEvent(document, 'keyup');
-
-function request() {
-    return fetch('https://api.github.com/search/repositories?q=' + inputSearch.value)
-        .then((res) => {
-            if (res.status === 200) {
-                return res.json();
-            }
-            return null;
-        });
-}
-
-const requestSequence$ = changeSequence$.pipe(
-    switchMap(
-        (_keyup) => request()
-    )
-);
+const changeSequence$ = fromEvent(inputSearch, 'keyup');
 
 type r = {
     html_url: string
 };
 
-setTimeout(() => {
-    requestSequence$.subscribe((res) => {
+function search(source$: Observable<Event>): any {
+    return source$.pipe(
+        debounceTime(500),
+        distinctUntilChanged(),
+        map((event: Event) => (event.target as HTMLInputElement).value),
+        filter((value: string) => (value.length > 2 && value !== '')),
+        switchMap((query: string) => fetch(`https://api.github.com/search/repositories?q=${query}`)
+            .then((res) => res.json())
+        )
+    );
+}
+
+search(changeSequence$)
+    .subscribe((res: any) => {
         // tslint:disable-next-line
         console.log(res);
         if (null !== res) {
@@ -43,4 +40,3 @@ setTimeout(() => {
             divContent.innerHTML = '';
         }
     });
-}, 3000);
